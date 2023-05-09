@@ -1,0 +1,13 @@
+<pre id="log"></pre>
+<script>
+    var url = "/stream"
+    var stream = new EventSource(url);
+    stream.addEventListener("end", function (e) {
+        console.log("end")
+        stream.close();
+    })
+    stream.addEventListener("message", function (e) {
+        console.log(e.data)
+        document.getElementById('log').innerHTML += e.data+'<br>'
+    })
+</script>
