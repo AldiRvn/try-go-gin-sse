@@ -15,17 +15,18 @@ import (
 	_ "github.com/joho/godotenv/autoload"
 )
 
-var AppPort = ":" + os.Getenv("APP_SSE_PORT")
+var (
+	AppPort    = ":" + os.Getenv("APP_SSE_PORT")
+	chanStream = make(chan string)
+)
 
 func stream(c *gin.Context) {
 	//? Set Timeout Stream
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	chanStream := make(chan string)
-	done := make(chan bool)
-
 	//? Handle Closing Stream
+	done := make(chan bool)
 	go func() {
 		for {
 			select {
@@ -40,20 +41,6 @@ func stream(c *gin.Context) {
 				done <- true
 				return
 			}
-		}
-	}()
-
-	//? Writing Channel
-	var mu sync.Mutex
-	go func() {
-		for {
-			mu.Lock()
-
-			layout := []string{time.Layout, time.ANSIC, time.UnixDate, time.RubyDate, time.RFC822, time.RFC822Z, time.RFC850, time.RFC1123, time.RFC1123Z, time.RFC3339, time.RFC3339Nano, time.Kitchen, time.Stamp, time.StampMilli, time.StampMicro, time.StampNano, time.DateTime, time.DateOnly, time.TimeOnly}
-			chanStream <- time.Now().Format(layout[rand.Intn(len(layout))])
-
-			mu.Unlock()
-			time.Sleep(1 * time.Second)
 		}
 	}()
 
@@ -82,6 +69,20 @@ func main() {
 
 	router.StaticFile("/", "./src/public/index.html")
 	router.GET("/stream", stream)
+
+	// ? Writing Channel
+	var mu sync.Mutex
+	go func() {
+		for {
+			mu.Lock()
+
+			layout := []string{time.Layout, time.ANSIC, time.UnixDate, time.RubyDate, time.RFC822, time.RFC822Z, time.RFC850, time.RFC1123, time.RFC1123Z, time.RFC3339, time.RFC3339Nano, time.Kitchen, time.Stamp, time.StampMilli, time.StampMicro, time.StampNano, time.DateTime, time.DateOnly, time.TimeOnly}
+			chanStream <- time.Now().Format(layout[rand.Intn(len(layout))])
+
+			mu.Unlock()
+			time.Sleep(1 * time.Second)
+		}
+	}()
 
 	log.Println("http://localhost" + AppPort)
 	router.Run(AppPort)
