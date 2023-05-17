@@ -6,21 +6,28 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"math/rand"
+	"net/http"
 	"os"
-	"sync"
+	"runtime"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	_ "github.com/joho/godotenv/autoload"
+	"github.com/logrusorgru/aurora"
 )
 
-var (
-	AppPort    = ":" + os.Getenv("APP_SSE_PORT")
-	chanStream = make(chan string)
-)
+var AppPort = ":" + os.Getenv("APP_SSE_PORT")
+
+func init() {
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
+}
 
 func stream(c *gin.Context) {
+	target := c.Param("target")
+	if _, found := listReceiverActive[target]; !found {
+		listReceiverActive[target] = listReceiver[target]
+	}
+
 	//? Set Timeout Stream
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
@@ -51,36 +58,58 @@ func stream(c *gin.Context) {
 			case <-done:
 				c.SSEvent("end", "end")
 				return false
-			case msg := <-chanStream:
+			case msg := <-listReceiverActive[target]:
+				log.Println(aurora.BgGreen("-> New msg"), msg)
 				c.SSEvent("message", msg)
 				return true
 			}
 		}
 	})
 	if !isStreaming {
-		log.Println("closed")
+		delete(listReceiverActive, target)
+		log.Println(aurora.BgRed("closed"))
 	}
 }
 
+var listReceiver = map[string]chan string{
+	"Marcus Silva":  make(chan string),
+	"Matilda Logan": make(chan string),
+	"Lenora Pope":   make(chan string),
+	"Theodore King": make(chan string),
+	"Ralph Bailey":  make(chan string),
+}
+var listReceiverActive = map[string]chan string{}
+
+func getListReceiverKey() (res []string) {
+	for key := range listReceiver {
+		res = append(res, key)
+	}
+	return
+}
+
 func main() {
+	log.Println("NumGoroutine", runtime.NumGoroutine())
 	fmt.Printf("AppPort: %v\n", AppPort)
 
 	router := gin.Default()
 
 	router.StaticFile("/", "./src/public/index.html")
-	router.GET("/stream", stream)
+	router.GET("/target", func(ctx *gin.Context) { ctx.JSON(http.StatusOK, map[string]any{"data": getListReceiverKey()}) })
+	router.GET("/stream/:target", stream)
 
 	// ? Writing Channel
-	var mu sync.Mutex
 	go func() {
+		log.Println("NumGoroutine", runtime.NumGoroutine())
+
 		for {
-			mu.Lock()
+			time.Sleep(500 * time.Millisecond)
+			for key := range listReceiverActive {
+				log.Println(aurora.BgYellow("<- Send msg to"), key)
+				listReceiverActive[key] <- fmt.Sprint(key)
 
-			layout := []string{time.Layout, time.ANSIC, time.UnixDate, time.RubyDate, time.RFC822, time.RFC822Z, time.RFC850, time.RFC1123, time.RFC1123Z, time.RFC3339, time.RFC3339Nano, time.Kitchen, time.Stamp, time.StampMilli, time.StampMicro, time.StampNano, time.DateTime, time.DateOnly, time.TimeOnly}
-			chanStream <- time.Now().Format(layout[rand.Intn(len(layout))])
-
-			mu.Unlock()
-			time.Sleep(1 * time.Second)
+				time.Sleep(1 * time.Second)
+				log.Println("NumGoroutine", runtime.NumGoroutine())
+			}
 		}
 	}()
 

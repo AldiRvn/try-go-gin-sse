@@ -1,13 +1,48 @@
-<pre id="log"></pre>
+<div id="target"></div>
+<pre id="log" style="
+    min-height: 50vh;
+    max-height: 50vh;
+    overflow: scroll;
+">
+    Please Select 1 Target Above
+</pre>
 <script>
-    var url = "/stream"
-    var stream = new EventSource(url);
-    stream.addEventListener("end", function (e) {
-        console.log("end")
-        stream.close();
-    })
-    stream.addEventListener("message", function (e) {
-        console.log(e.data)
-        document.getElementById('log').innerHTML += e.data+'<br>'
-    })
+    var target = ""
+    var url = ""
+    var eventSource = undefined;
+
+    function changeTarget(newTarget) {
+        document.getElementById('log').innerHTML = ""
+        if (eventSource != undefined) {
+            console.log("Closing", target)
+            eventSource.close();
+        }
+
+        target = newTarget
+        console.log("New target:", target)
+
+        url = `/stream/${target}`
+        eventSource = new EventSource(url);
+        runStream()
+    }
+    function runStream() {
+        eventSource.addEventListener("end", function (e) {
+            console.log("end")
+            eventSource.close();
+        })
+        eventSource.addEventListener("message", function (e) {
+            console.log(e.data)
+            document.getElementById('log').innerHTML += e.data+'<br>'
+        })
+    }
+
+    async function main(){
+        const response = await fetch("/target");
+        const jsonData = await response.json();
+
+        jsonData.data.forEach(element => {
+            document.getElementById('target').innerHTML += `<button onclick="changeTarget('${element}')">${element}</button>`
+        });
+    }
+    main()
 </script>
