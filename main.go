@@ -24,7 +24,7 @@ func init() {
 
 func stream(c *gin.Context) {
 	target := c.Param("target")
-	if _, found := listReceiverActive[target]; !found {
+	if _, found := listReceiverActive[target]; !found { //? Register Active
 		listReceiverActive[target] = listReceiver[target]
 	}
 
@@ -66,8 +66,9 @@ func stream(c *gin.Context) {
 		}
 	})
 	if !isStreaming {
-		delete(listReceiverActive, target)
-		log.Println(aurora.BgRed("closed"))
+		<-listReceiverActive[target]       //? Throw Away Active Channel
+		delete(listReceiverActive, target) //? Delete From Active
+		log.Println(aurora.BgRed("CLOSED"))
 	}
 }
 
